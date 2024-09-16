@@ -1,0 +1,109 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Script</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border: 1px solid #ddd;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Python Script</h1>
+    <pre>
+import requests
+import datetime
+
+# Function to fetch klines data from Binance Futures API
+def fetch_klines(symbol, interval, start_time, end_time, limit=1500, price_type="last"):
+    base_url = "https://fapi.binance.com"
+    if price_type == "mark":
+        endpoint = "/fapi/v1/markPriceKlines"
+    else:
+        endpoint = "/fapi/v1/klines"
+    
+    params = {
+        "symbol": symbol,
+        "interval": interval,
+        "startTime": start_time,
+        "endTime": end_time,
+        "limit": limit
+    }
+    response = requests.get(base_url + endpoint, params=params)
+    response.raise_for_status()
+    return response.json()
+
+# Function to check if trailing stop order is activated
+def check_trailing_stop(symbol, start_time, end_time, activation_price, callback_rate, order_type, price_type):
+    klines = fetch_klines(symbol, "1m", start_time, end_time, price_type=price_type)
+    
+    prices = [float(kline[4]) for kline in klines]  # Closing prices
+    times = [datetime.datetime.fromtimestamp(kline[0] / 1000) for kline in klines]  # Open times
+    
+    lowest_price = min(prices)
+    highest_price = max(prices)
+    lowest_time = times[prices.index(lowest_price)]
+    highest_time = times[prices.index(highest_price)]
+    
+    print(f"Lowest Price: {lowest_price} at {lowest_time}")
+    print(f"Highest Price: {highest_price} at {highest_time}")
+    
+    if order_type == "buy":
+        if any(price <= activation_price for price in prices):
+            bounce_back_price = lowest_price * (1 + callback_rate)
+            if any(price >= bounce_back_price for price in prices):
+                return True
+    elif order_type == "sell":
+        if any(price >= activation_price for price in prices):
+            bounce_back_price = highest_price * (1 - callback_rate)
+            if any(price <= bounce_back_price for price in prices):
+                return True
+    return False
+
+# Input parameters
+symbol = input("Enter the symbol (e.g., BTCUSDT): ")
+start_time_str = input("Enter the start time (UTC) in format 'YYYY-MM-DD HH:MM:SS': ")
+end_time_str = input("Enter the end time (UTC) in format 'YYYY-MM-DD HH:MM:SS': ")
+activation_price = float(input("Enter the activation price: "))
+callback_rate = float(input("Enter the callback rate (e.g., 0.01 for 1%): "))
+order_type = input("Enter the order type ('buy' or 'sell'): ").lower()
+price_type = input("Enter the trigger condition ('mark' for mark price, 'last' for last price): ").lower()
+
+# Debugging prints
+print(f"Symbol: {symbol}")
+print(f"Start Time: {start_time_str}")
+print(f"End Time: {end_time_str}")
+print(f"Activation Price: {activation_price}")
+print(f"Callback Rate: {callback_rate}")
+print(f"Order Type: {order_type}")
+print(f"Price Type: {price_type}")
+
+# Convert input times to milliseconds since epoch
+start_time = int(datetime.datetime.strptime(start_time_str, "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
+end_time = int(datetime.datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
+
+# Debugging prints
+print(f"Start Time (ms): {start_time}")
+print(f"End Time (ms): {end_time}")
+
+# Check if trailing stop order is activated
+is_activated = check_trailing_stop(symbol, start_time, end_time, activation_price, callback_rate, order_type, price_type)
+
+if is_activated:
+    print("Trailing stop order is activated.")
+else:
+    print("Trailing stop order is not activated.")
+    </pre>
+</body>
+</html>
+```
